@@ -1,74 +1,182 @@
-import { Image, StyleSheet, Platform } from 'react-native';
-
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
+import { Fragment, useEffect, useState } from "react";
+import { Button } from "react-native";
+import {
+  StyleSheet,
+  SafeAreaView,
+  StatusBar,
+  View,
+  FlatList,
+  Text,
+  ActivityIndicator,
+  TextInput,
+} from "react-native";
 
 export default function HomeScreen() {
+  const [posts, setPosts] = useState<
+    {
+        userId: number;
+        id: number;
+        title: string;
+        body: string;
+      }[]
+    | null
+  >(null);
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [postTitle, setPostTitle] = useState("");
+  const [postBody, setPostBody] = useState("");
+  const [isPosting, setIsPosting] = useState<boolean>(false);
+  const [error, setError] = useState("");
+
+  const fetchPosts = async (limit = 10) => {
+    const resp = await fetch(
+      `https://jsonplaceholder.typicode.com/posts?_limit=${limit}`
+    );
+    const data = await resp.json();
+    setPosts(data);
+    setIsLoading(false);
+  };
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    fetchPosts(20);
+    setIsRefreshing(false);
+  };
+
+  const handlePost = async () => {
+    setIsPosting(true);
+    try {
+      const resp = await fetch(`https://jsonplaceholder.typicode.com/posts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: postTitle,
+          body: postBody,
+        }),
+      });
+      const data = await resp.json();
+      setPosts((prev) => [data, ...prev]);
+      setIsPosting(false);
+      setPostTitle(""), setPostBody("");
+    } catch (error) {
+      console.log("Failed to fetch data: ", error);
+      setIsPosting(false);
+      setError("failed to fetch posts");
+    }
+  };
+
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ActivityIndicator size={"large"} color={"#0000ff"} />
+        <Text>Loading posts...</Text>
+      </SafeAreaView>
+    );
+  }
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+    <SafeAreaView style={styles.container}>
+      <View style={styles.formContainer}>
+        <TextInput
+          style={styles.input}
+          placeholder="post title"
+          value={postTitle}
+          onChangeText={setPostTitle}
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12'
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        <TextInput
+          style={[styles.input, { height: 64 }]}
+          placeholder="post body..."
+          multiline
+          value={postBody}
+          onChangeText={setPostBody}
+        />
+        <Button
+          title={isPosting ? "submitting..." : "submit post"}
+          disabled={isPosting}
+          onPress={handlePost}
+        />
+      </View>
+      <Fragment>
+        <View style={styles.postsContainer}>
+          <FlatList
+            data={posts}
+            keyExtractor={(item)=> item.id.toString().toLowerCase()}
+            renderItem={({ item }) => {
+              return (
+                <View style={styles.card}>
+                  <Text style={styles.title}>{item.title}</Text>
+                  <Text style={styles.body}>{item.body}</Text>
+                </View>
+              );
+            }}
+            ListEmptyComponent={<Text>No posts found</Text>}
+            ItemSeparatorComponent={() => <View style={{ height: 15 }}></View>}
+            ListHeaderComponent={<Text style={styles.header}>Post List</Text>}
+            ListFooterComponent={<Text style={styles.footer}>End of List</Text>}
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+          />
+        </View>
+      </Fragment>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    flex: 1,
+    backgroundColor: "#f5f5f5",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: StatusBar.currentHeight,
   },
-  stepContainer: {
-    gap: 8,
+  postsContainer: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  card: {
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  title: {
+    fontSize: 30,
+  },
+  body: {
+    fontSize: 24,
+    color: "#666666",
+  },
+  header: {
+    fontSize: 24,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  footer: {
+    fontSize: 24,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginTop: 12,
+  },
+  formContainer: {
+    backgroundColor: "#fff",
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  input: {
+    height: 40,
+    borderColor: "gray",
+    borderWidth: 1,
     marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+    padding: 8,
+    borderRadius: 8,
   },
 });
